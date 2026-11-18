@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #0f172a;
+    color: #f8fafc;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 1rem 1.5rem;
+    background: #1e293b;
+    border-bottom: 1px solid #334155;
+    font-weight: 600;
+    font-size: 1.125rem;
+  }
+  main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .message {
+    max-width: 70%;
+    padding: 0.75rem 1rem;
+    border-radius: 1rem;
+    line-height: 1.5;
+    font-size: 0.95rem;
+  }
+  .message.user {
+    align-self: flex-end;
+    background: #3b82f6;
+    color: #ffffff;
+    border-bottom-right-radius: 0.25rem;
+  }
+  .message.assistant {
+    align-self: flex-start;
+    background: #334155;
+    color: #e2e8f0;
+    border-bottom-left-radius: 0.25rem;
+  }
+  .search-hint {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: #93c5fd;
+    font-style: italic;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .search-hint::before {
+    content: "\1F50D";
+  }
+  footer {
+    padding: 1rem 1.5rem;
+    background: #1e293b;
+    border-top: 1px solid #334155;
+    display: flex;
+    gap: 0.5rem;
+  }
+  input[type="text"] {
+    flex: 1;
+    padding: 0.6rem 1rem;
+    border-radius: 2rem;
+    border: 1px solid #334155;
+    background: #0f172a;
+    color: #f8fafc;
+    font-size: 0.95rem;
+    outline: none;
+  }
+  input[type="text"]:focus {
+    border-color: #3b82f6;
+  }
+  button {
+    padding: 0.6rem 1.2rem;
+    border-radius: 2rem;
+    border: none;
+    background: #3b82f6;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  button:hover {
+    background: #2563eb;
+  }
+  button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .empty {
+    align-self: center;
+    color: #64748b;
+    font-size: 0.9rem;
+  }
+</style>
+</head>
+<body>
+<header>Chat</header>
+<main id="chat">
+  <div class="empty">Laita viesti&hellip;</div>
+</main>
+<footer>
+  <input type="text" id="input" placeholder="Kirjoita viesti&hellip;" autocomplete="off">
+  <button id="send">Lähetä</button>
+</footer>
+<script>
+  const chatEl = document.getElementById("chat");
+  const inputEl = document.getElementById("input");
+  const sendEl = document.getElementById("send");
+  let history = [];
+
+  function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function addMessage(role, text, searchesUsed) {
+    const empty = chatEl.querySelector(".empty");
+    if (empty) empty.remove();
+
+    const div = document.createElement("div");
+    div.className = `message ${role}`;
+    div.textContent = text;
+    chatEl.appendChild(div);
+
+    if (role === "assistant" && searchesUsed && searchesUsed.length > 0) {
+      const hint = document.createElement("div");
+      hint.className = "search-hint";
+      hint.textContent = "Haettiin: " + searchesUsed.join(", ");
+      chatEl.appendChild(hint);
+    }
+
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  async function send() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    inputEl.disabled = true;
+    sendEl.disabled = true;
+
+    addMessage("user", text);
+
+    try {
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, history }),
+      });
+      const data = await res.json();
+      history = [...history, { role: "user", content: text }, { role: "assistant", content: data.response }];
+      addMessage("assistant", data.response, data.searches_used);
+    } catch (err) {
+      addMessage("assistant", "Virhe: " + escapeHtml(err.message));
+    } finally {
+      inputEl.value = "";
+      inputEl.disabled = false;
+      sendEl.disabled = false;
+      inputEl.focus();
+    }
+  }
+
+  sendEl.addEventListener("click", send);
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  });
+</script>
+</body>
+</html>
